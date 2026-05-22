@@ -19,16 +19,26 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Referral code is required' }, { status: 400 });
     }
 
-    if (isNaN(discountPercent) || discountPercent < 0 || discountPercent > 20) {
-      return NextResponse.json({ error: 'Discount percentage must be between 0 and 20.' }, { status: 400 });
+    const client = await pool.connect();
+    console.log('Database connected successfully');
+
+    // Get partner's commission_rate
+    const partnerCheck = await client.query('SELECT commission_rate FROM partner_details WHERE user_id = $1', [user.id]);
+    const commissionRate = parseFloat(partnerCheck.rows[0]?.commission_rate || 20);
+
+    if (isNaN(discountPercent) || discountPercent < 0 || discountPercent > commissionRate) {
+      client.release();
+      return NextResponse.json({ error: `Discount percentage must be between 0 and ${commissionRate}.` }, { status: 400 });
     }
 
-    if (isNaN(myShare) || myShare < 0 || myShare > 20) {
-      return NextResponse.json({ error: 'My share must be between 0 and 20.' }, { status: 400 });
+    if (isNaN(myShare) || myShare < 0 || myShare > commissionRate) {
+      client.release();
+      return NextResponse.json({ error: `My share must be between 0 and ${commissionRate}.` }, { status: 400 });
     }
 
-    if (parseFloat((discountPercent + myShare).toFixed(2)) !== 20) { // Check if sum is 20 (allowing for float precision)
-        return NextResponse.json({ error: 'The sum of discount percentage and my share must be 20.' }, { status: 400 });
+    if (Math.abs((discountPercent + myShare) - commissionRate) > 0.01) {
+      client.release();
+      return NextResponse.json({ error: `The sum of discount percentage and my share must be ${commissionRate}.` }, { status: 400 });
     }
 
     // Validate dates
@@ -38,6 +48,7 @@ export async function POST(request) {
     if (startDate) {
       validStartDate = new Date(startDate);
       if (isNaN(validStartDate.getTime())) {
+        client.release();
         return NextResponse.json({ error: 'Invalid start date format.' }, { status: 400 });
       }
     }
@@ -45,16 +56,15 @@ export async function POST(request) {
     if (endDate) {
       validEndDate = new Date(endDate);
       if (isNaN(validEndDate.getTime())) {
+        client.release();
         return NextResponse.json({ error: 'Invalid end date format.' }, { status: 400 });
       }
     }
 
     if (validStartDate && validEndDate && validStartDate > validEndDate) {
+      client.release();
       return NextResponse.json({ error: 'End date cannot be before start date.' }, { status: 400 });
     }
-
-    const client = await pool.connect();
-    console.log('Database connected successfully');
 
     // Check if code already exists
     const codeCheck = await client.query(

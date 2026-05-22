@@ -24,7 +24,7 @@ seedDatabase().catch(console.error);
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`} data-bs-theme="dark">
       <body>
         <SocketProvider>
           {children}

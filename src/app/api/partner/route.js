@@ -15,7 +15,7 @@ export async function GET(request) {
     // Get partner details
     console.log('Fetching partner details for user id:', user.id);
     const partnerDetails = await client.query(
-      'SELECT position FROM partner_details WHERE user_id = $1',
+      'SELECT position, commission_rate FROM partner_details WHERE user_id = $1',
       [user.id]
     );
     console.log('Partner details result:', partnerDetails.rows);
@@ -135,6 +135,7 @@ export async function GET(request) {
     const partnerData = {
       profile: {
         position: details?.position || 'N/A',
+        commission_rate: details?.commission_rate || 20,
         name: user.name,
         email: user.email
       },

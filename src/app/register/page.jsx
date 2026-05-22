@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, Suspense } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Toaster, toast } from 'react-hot-toast';
 import Link from 'next/link';
 import {
@@ -32,6 +32,8 @@ import {
 
 function RegisterContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const inviteToken = searchParams.get('token');
 
   const [activeStep, setActiveStep] = useState(0);
 
@@ -41,6 +43,29 @@ function RegisterContent() {
     password: '',
     position: ''
   });
+  const [isInvited, setIsInvited] = useState(false);
+
+  useEffect(() => {
+    if (inviteToken) {
+      // Fetch invitation details if token exists
+      const verifyToken = async () => {
+        try {
+          const res = await fetch(`/api/auth/verify-invite?token=${inviteToken}`);
+          const data = await res.json();
+          if (res.ok) {
+            setFormData(prev => ({ ...prev, email: data.email }));
+            setIsInvited(true);
+          } else {
+            toast.error(data.error || 'Invalid or expired invitation');
+          }
+        } catch (err) {
+          console.error('Token verification error:', err);
+        }
+      };
+      verifyToken();
+    }
+  }, [inviteToken]);
+
   const [otpValues, setOtpValues] = useState(['', '', '', '', '', '']);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,8 +86,10 @@ function RegisterContent() {
           name: formData.name,
           email: formData.email,
           password: formData.password,
-          position: formData.position
-        })      });
+          position: formData.position,
+          token: inviteToken || undefined
+        })
+      });
 
       const data = await res.json();
 
@@ -76,10 +103,11 @@ function RegisterContent() {
         toast.success('OTP sent to your email!');
         startCountdown();
       } else {
-        localStorage.setItem('token', data.token);
-        localStorage.setItem('user', JSON.stringify(data.user));
         toast.success('Registration successful!');
-        router.push('/partner');
+        setActiveStep(2); // Show success screen
+        setTimeout(() => {
+          router.push('/login');
+        }, 2000);
       }
     } catch (err) {
       toast.error('Something went wrong');
@@ -115,6 +143,23 @@ function RegisterContent() {
       const nextInput = document.getElementById(`otp-input-${index + 1}`);
       if (nextInput) nextInput.focus();
     }
+  };
+
+  const handleOtpPaste = (e) => {
+    e.preventDefault();
+    const pasteData = e.clipboardData.getData('text').slice(0, 6);
+    if (!/^\d+$/.test(pasteData)) return;
+
+    const newOtp = [...otpValues];
+    pasteData.split('').forEach((char, index) => {
+      if (index < 6) newOtp[index] = char;
+    });
+    setOtpValues(newOtp);
+
+    // Focus last filled input or the next empty one
+    const nextIndex = Math.min(pasteData.length, 5);
+    const nextInput = document.getElementById(`otp-input-${nextIndex}`);
+    if (nextInput) nextInput.focus();
   };
 
   const handleOtpKeyDown = (index, e) => {
@@ -242,6 +287,8 @@ function RegisterContent() {
                                   value={formData.email}
                                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                   required
+                                  readOnly={isInvited}
+                                  disabled={isInvited}
                                 />
                               </InputGroup>
                             </Form.Group>
@@ -300,7 +347,7 @@ function RegisterContent() {
                           {loading ? (
                             <Spinner animation="border" size="sm" />
                           ) : (
-                            'Register & Send OTP'
+                            isInvited ? 'Accept Invitation & Verify Email' : 'Register & Send OTP'
                           )}
                         </Button>
                       </Form>
@@ -339,6 +386,7 @@ function RegisterContent() {
                             maxLength={1}
                             onChange={(e) => handleOtpChange(index, e.target.value)}
                             onKeyDown={(e) => handleOtpKeyDown(index, e)}
+                            onPaste={handleOtpPaste}
                           />
                         ))}
                       </div>

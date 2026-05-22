@@ -30,13 +30,34 @@ export async function POST(request) {
     }
 
     // OTP is valid - mark user as verified
+    await client.query('BEGIN');
+
     await client.query(
       'UPDATE users SET is_verified = true WHERE email = $1',
       [email]
     );
 
+    // If user was invited, auto-approve them and mark invitation as accepted
+    const inviteCheck = await client.query(
+      'SELECT id FROM partner_invitations WHERE email = $1 AND status = \'pending\'',
+      [email]
+    );
+
+    if (inviteCheck.rows.length > 0) {
+      await client.query(
+        'UPDATE users SET is_approved = true WHERE email = $1',
+        [email]
+      );
+      await client.query(
+        'UPDATE partner_invitations SET status = \'accepted\' WHERE email = $1',
+        [email]
+      );
+    }
+
     // Delete used OTP
     await client.query('DELETE FROM otp_verification WHERE email = $1', [email]);
+
+    await client.query('COMMIT');
 
     return NextResponse.json({
       message: 'Email verified successfully'

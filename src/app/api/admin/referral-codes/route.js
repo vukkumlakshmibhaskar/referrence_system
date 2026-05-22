@@ -59,17 +59,34 @@ export async function POST(request) {
       return NextResponse.json({ error: 'Referral code is required' }, { status: 400 });
     }
 
-    if (isNaN(discountPercent) || discountPercent < 0 || discountPercent > 20) {
-      return NextResponse.json({ error: 'Discount percentage must be between 0 and 20.' }, { status: 400 });
+    const client = await pool.connect();
+
+    // Verify partner exists and get their commission_rate
+    const partnerCheck = await client.query(`
+      SELECT u.id, u.name, pd.commission_rate 
+      FROM users u 
+      LEFT JOIN partner_details pd ON u.id = pd.user_id 
+      WHERE u.id = $1 AND u.role = $2
+    `, [partnerId, 'partner']);
+
+    if (partnerCheck.rows.length === 0) {
+      client.release();
+      return NextResponse.json({ error: 'Partner not found' }, { status: 404 });
     }
 
-    if (isNaN(myShare) || myShare < 0 || myShare > 20) {
-      return NextResponse.json({ error: 'My share must be between 0 and 20.' }, { status: 400 });
+    const commissionRate = parseFloat(partnerCheck.rows[0].commission_rate || 20);
+
+    if (isNaN(discountPercent) || discountPercent < 0 || discountPercent > commissionRate) {
+      return NextResponse.json({ error: `Discount percentage must be between 0 and ${commissionRate}.` }, { status: 400 });
+    }
+
+    if (isNaN(myShare) || myShare < 0 || myShare > commissionRate) {
+      return NextResponse.json({ error: `My share must be between 0 and ${commissionRate}.` }, { status: 400 });
     }
 
     const totalPercentage = Math.round((parseFloat(discountPercent) + parseFloat(myShare)) * 100) / 100;
-    if (totalPercentage !== 20) {
-      return NextResponse.json({ error: 'The sum of discount percentage and my share must be 20.' }, { status: 400 });
+    if (Math.abs(totalPercentage - commissionRate) > 0.01) {
+      return NextResponse.json({ error: `The sum of discount percentage and my share must be ${commissionRate}.` }, { status: 400 });
     }
 
     // Validate dates
@@ -92,19 +109,6 @@ export async function POST(request) {
 
     if (validStartDate && validEndDate && validStartDate > validEndDate) {
       return NextResponse.json({ error: 'End date cannot be before start date.' }, { status: 400 });
-    }
-
-    const client = await pool.connect();
-
-    // Verify partner exists
-    const partnerCheck = await client.query(
-      'SELECT id, name FROM users WHERE id = $1 AND role = $2',
-      [partnerId, 'partner']
-    );
-
-    if (partnerCheck.rows.length === 0) {
-      client.release();
-      return NextResponse.json({ error: 'Partner not found' }, { status: 404 });
     }
 
     // Check if code already exists

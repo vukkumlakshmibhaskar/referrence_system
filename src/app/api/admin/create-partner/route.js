@@ -11,7 +11,7 @@ export async function POST(request) {
 
   try {
     const body = await request.json();
-    const { email, password, name, position } = body;
+    const { email, password, name, position, commissionRate } = body;
 
     if (!email || !password || !name) {
       return NextResponse.json(
@@ -46,8 +46,8 @@ export async function POST(request) {
 
       // Insert partner details
       await client.query(
-        'INSERT INTO partner_details (user_id, position) VALUES ($1, $2)',
-        [newPartner.id, position || '']
+        'INSERT INTO partner_details (user_id, position, commission_rate) VALUES ($1, $2, $3)',
+        [newPartner.id, position || '', parseFloat(commissionRate) || 20.00]
       );
 
       await client.query('COMMIT');

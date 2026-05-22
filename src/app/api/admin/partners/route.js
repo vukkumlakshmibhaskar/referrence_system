@@ -14,7 +14,7 @@ export async function GET(request) {
 
     const result = await client.query(`
       SELECT u.id, u.name, u.email, u.is_verified, u.is_approved, u.created_at,
-             pd.position,
+             pd.position, pd.commission_rate,
              (SELECT COUNT(*) FROM referral_codes WHERE partner_id = u.id) as referral_code_count,
              COALESCE((
                SELECT SUM(t.amount) 
@@ -52,7 +52,7 @@ export async function PUT(request) {
 
   try {
     const body = await request.json();
-    const { partnerId, name, email, position, isVerified } = body;
+    const { partnerId, name, email, position, isVerified, commissionRate } = body;
 
     if (!partnerId) {
       return NextResponse.json({ error: 'Partner ID required' }, { status: 400 });
@@ -91,6 +91,10 @@ export async function PUT(request) {
     if (position) {
       detailUpdates.push(`position = $${paramIndex++}`);
       detailParams.push(position);
+    }
+    if (commissionRate !== undefined) {
+      detailUpdates.push(`commission_rate = $${paramIndex++}`);
+      detailParams.push(commissionRate);
     }
 
     if (detailUpdates.length > 0) {

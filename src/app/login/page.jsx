@@ -136,6 +136,13 @@ export default function LoginPage() {
     }
   };
 
+  const handleOtpPaste = (e) => {
+    const pasteData = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (pasteData.length === 6) {
+      setOtp(pasteData);
+    }
+  };
+
   return (
     <>
       <Toaster position="top-center" />
@@ -156,6 +163,7 @@ export default function LoginPage() {
               placeholder="6-digit code"
               value={otp}
               onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onPaste={handleOtpPaste}
               maxLength={6}
             />
             <Button
@@ -197,7 +205,7 @@ export default function LoginPage() {
                     <div className="auth-icon-circle" suppressHydrationWarning>
                       <BoxArrowInRight size={30} />
                     </div>
-                    <h1 className="h3 fw-bold" suppressHydrationWarning>Welcome Back</h1>
+                    <h1 className="h3 fw-bold" suppressHydrationWarning>Welcome</h1>
                     <p className="opacity-75 small" suppressHydrationWarning>Sign in to continue to your dashboard</p>
                   </div>
 
@@ -243,6 +251,11 @@ export default function LoginPage() {
                           {showPassword ? <EyeSlash /> : <Eye />}
                         </Button>
                       </InputGroup>
+                      <div className="text-end mt-2" suppressHydrationWarning>
+                        <Link href="/forgot-password" style={{ color: 'var(--primary-color)', fontSize: '0.85rem', textDecoration: 'none', fontWeight: '500' }}>
+                          Forgot Password?
+                        </Link>
+                      </div>
                     </Form.Group>
 
                     <Button

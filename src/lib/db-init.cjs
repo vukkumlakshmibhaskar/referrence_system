@@ -47,10 +47,17 @@ async function initDatabase() {
       CREATE TABLE IF NOT EXISTS partner_details (
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id),
-        position VARCHAR(100)
+        position VARCHAR(100),
+        commission_rate DECIMAL(5,2) DEFAULT 20.00
       )
     `);
     console.log('Partner details table created');
+
+    // Add commission_rate column to partner_details if not exists
+    await client.query(`
+      ALTER TABLE partner_details ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5,2) DEFAULT 20.00
+    `);
+    console.log('Added commission_rate column to partner_details');
 
     // Create referral_codes table
     await client.query(`
@@ -168,6 +175,20 @@ async function initDatabase() {
         console.log(`Inserted user: ${user.email}`);
       }
     }
+    // Create partner_invitations table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS partner_invitations (
+        id SERIAL PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        token VARCHAR(255) UNIQUE NOT NULL,
+        commission_rate DECIMAL(5,2) DEFAULT 20.00,
+        status VARCHAR(50) DEFAULT 'pending',
+        expires_at TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('Partner invitations table created');
+
     console.log('Database initialized successfully');
   } catch (error) {
     console.error('Database initialization error:', error);

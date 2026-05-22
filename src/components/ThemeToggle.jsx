@@ -7,8 +7,8 @@ import { Moon, Sun, CircleHalf } from 'react-bootstrap-icons';
 const themes = ['light', 'dark', 'system'];
 
 export default function ThemeToggle() {
-  const [mode, setMode] = useState('system');
-  const [actualMode, setActualMode] = useState('light');
+  const [mode, setMode] = useState('dark');
+  const [actualMode, setActualMode] = useState('dark');
   const [mounted, setMounted] = useState(false);
 
   // Initialize theme from localStorage on mount
@@ -17,6 +17,9 @@ export default function ThemeToggle() {
     const savedMode = typeof window !== 'undefined' ? localStorage.getItem('theme-mode') : null;
     if (savedMode && themes.includes(savedMode)) {
       setMode(savedMode);
+    } else {
+      // If no preference saved, explicitly set 'dark'
+      setMode('dark');
     }
   }, []);
 

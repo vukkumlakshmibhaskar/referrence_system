@@ -159,7 +159,7 @@ export default function AdminDashboard() {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [newPartner, setNewPartner] = useState({
-    email: '', password: '', name: '', position: ''
+    email: '', password: '', name: '', position: '', commissionRate: 20
   });
   const [creatingPartner, setCreatingPartner] = useState(false);
   const [showCodeModal, setShowCodeModal] = useState(false);
@@ -171,6 +171,61 @@ export default function AdminDashboard() {
   const [codeEndDate, setCodeEndDate] = useState('');   // New state for admin code creation
   const [creating, setCreating] = useState(false);
 
+  const handleCreatePartner = async () => {
+    setCreatingPartner(true);
+    try {
+      const res = await fetch('/api/admin/create-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(newPartner)
+      });
+      const result = await res.json();
+      if (res.ok) {
+        setPartners([...partners, result.partner]);
+        setOpenDialog(false);
+        setNewPartner({ email: '', password: '', name: '', position: '', commissionRate: 20 });
+        toast.success('Partner created successfully!');
+      } else {
+        toast.error(result.error);
+      }
+    } catch (err) {
+      toast.error('Failed to create partner');
+    } finally {
+      setCreatingPartner(false);
+    }
+  };
+
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: '', commissionRate: 20 });
+  const [inviting, setInviting] = useState(false);
+
+  const handleInvitePartner = async () => {
+    if (!inviteForm.email) {
+      toast.error('Email is required');
+      return;
+    }
+    setInviting(true);
+    try {
+      const res = await fetch('/api/admin/invite-partner', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(inviteForm)
+      });
+      const result = await res.json();
+      if (res.ok) {
+        toast.success(result.message);
+        setShowInviteModal(false);
+        setInviteForm({ email: '', commissionRate: 20 });
+      } else {
+        toast.error(result.error);
+      }
+    } catch (err) {
+      toast.error('Failed to send invitation');
+    } finally {
+      setInviting(false);
+    }
+  };
+
   const [editDialog, setEditDialog] = useState({ open: false, type: '', data: null });
   const [deleteDialog, setDeleteDialog] = useState({ open: false, type: '', id: null, name: '' });
   const [editForm, setEditForm] = useState({});
@@ -181,10 +236,22 @@ export default function AdminDashboard() {
     setMounted(true);
   }, []);
 
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [partnerToApprove, setPartnerToApprove] = useState(null);
+  const [commissionRateToAssign, setCommissionRateToAssign] = useState(20);
+  const [approving, setApproving] = useState(false);
+
   useEffect(() => {
-    const calculatedMyShare = 20 - (parseFloat(discountPercent) || 0);
-    setMyShare(Math.max(0, calculatedMyShare));
-  }, [discountPercent]);
+    if (selectedPartner) {
+      const partner = partners.find(p => p.id === parseInt(selectedPartner));
+      if (partner) {
+        // Update myShare calculation based on partner's commission_rate
+        const rate = parseFloat(partner.commission_rate || 20);
+        const calculatedMyShare = rate - (parseFloat(discountPercent) || 0);
+        setMyShare(Math.max(0, calculatedMyShare));
+      }
+    }
+  }, [discountPercent, selectedPartner, partners]);
 
   useEffect(() => {
     if (!mounted) return;
@@ -269,9 +336,13 @@ export default function AdminDashboard() {
 
   const createReferralCode = async () => {
     if (!selectedPartner || !newReferralCode) return;
+    
+    const partner = partners.find(p => p.id === parseInt(selectedPartner));
+    const commissionRate = parseFloat(partner?.commission_rate || 20);
+    
     const discount = parseFloat(discountPercent);
-    if (isNaN(discount) || discount < 0 || discount > 20) {
-      toast.error('Discount percentage must be between 0 and 20.');
+    if (isNaN(discount) || discount < 0 || discount > commissionRate) {
+      toast.error(`Discount percentage must be between 0 and ${commissionRate}.`);
       return;
     }
 
@@ -284,7 +355,7 @@ export default function AdminDashboard() {
           partnerId: selectedPartner, 
           code: newReferralCode,
           discountPercent: discount,
-          myShare: 20 - discount,
+          myShare: commissionRate - discount,
           startDate: codeStartDate || null,
           endDate: codeEndDate || null,
         })
@@ -309,40 +380,29 @@ export default function AdminDashboard() {
     }
   };
 
-  const handleCreatePartner = async () => {
-    setCreatingPartner(true);
-    try {
-      const res = await fetch('/api/admin/create-partner', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(newPartner)
-      });
-      const result = await res.json();
-      if (res.ok) {
-        setPartners([...partners, result.partner]);
-        setOpenDialog(false);
-        setNewPartner({ email: '', password: '', name: '', position: '' });
-        toast.success('Partner created successfully!');
-      } else {
-        toast.error(result.error);
-      }
-    } catch (err) {
-      toast.error('Failed to create partner');
-    } finally {
-      setCreatingPartner(false);
-    }
+  const handleApprovePartner = async (partner) => {
+    setPartnerToApprove(partner);
+    setCommissionRateToAssign(20);
+    setShowApproveModal(true);
   };
 
-  const handleApprovePartner = async (partnerId) => {
+  const confirmApprovePartner = async () => {
+    if (!partnerToApprove) return;
+    setApproving(true);
     try {
       const res = await fetch('/api/admin/approve-partner', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ partnerId })
+        body: JSON.stringify({ 
+          partnerId: partnerToApprove.id,
+          commissionRate: commissionRateToAssign
+        })
       });
       const result = await res.json();
       if (res.ok) {
         toast.success(result.message);
+        setShowApproveModal(false);
+        setPartnerToApprove(null);
         fetchPendingPartners();
         fetchPartnersData();
       } else {
@@ -350,6 +410,8 @@ export default function AdminDashboard() {
       }
     } catch (err) {
       toast.error('Failed to approve partner');
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -378,7 +440,13 @@ export default function AdminDashboard() {
     if (type === 'user') {
       setEditForm({ name: item.name, email: item.email, isVerified: item.is_verified });
     } else if (type === 'partner') {
-      setEditForm({ name: item.name, email: item.email, position: item.position, isVerified: item.is_verified });
+      setEditForm({ 
+        name: item.name, 
+        email: item.email, 
+        position: item.position, 
+        commissionRate: item.commission_rate || 20,
+        isVerified: item.is_verified 
+      });
     } else if (type === 'referralCode') {
       setEditForm({ 
         isActive: item.is_active,
@@ -705,9 +773,14 @@ export default function AdminDashboard() {
                         <h5 className="fw-bold mb-1" style={{ color: 'var(--foreground)' }}>Partner Network</h5>
                         <p className="small mb-0" style={{ color: 'var(--foreground)', opacity: 0.8 }}>Expand your system by adding new strategic partners</p>
                       </div>
-                      <Button variant="primary" className="rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center" onClick={() => setOpenDialog(true)}>
-                        <Plus size={20} className="me-1" /> Create Partner
-                      </Button>
+                      <div className="d-flex gap-2">
+                        <Button variant="outline-primary" className="rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center" onClick={() => setShowInviteModal(true)}>
+                          <Envelope size={20} className="me-1" /> Invite Partner
+                        </Button>
+                        <Button variant="primary" className="rounded-pill px-4 shadow-sm fw-bold d-flex align-items-center" onClick={() => setOpenDialog(true)}>
+                          <Plus size={20} className="me-1" /> Create Partner
+                        </Button>
+                      </div>
                     </Card.Body>
                   </Card>
 
@@ -717,6 +790,7 @@ export default function AdminDashboard() {
                         <tr>
                           <th>Partner Name</th>
                           <th>Email</th>
+                          <th>Commission</th>
                           <th>Total Sales</th>
                           <th>Total Earnings</th>
                           <th>Codes</th>
@@ -731,6 +805,7 @@ export default function AdminDashboard() {
                               <span className="fw-medium">{partner.name}</span>
                             </td>
                             <td className="opacity-75">{partner.email}</td>
+                            <td className="fw-bold text-primary">{parseFloat(partner.commission_rate || 20).toFixed(1)}%</td>
                             <td className="fw-bold">₹{parseFloat(partner.total_sales || 0).toFixed(2)}</td>
                             <td className="fw-bold text-success">₹{parseFloat(partner.total_earnings || 0).toFixed(2)}</td>
                             <td>
@@ -827,7 +902,7 @@ export default function AdminDashboard() {
                                     variant="success" 
                                     size="sm" 
                                     className="rounded-pill px-3 d-flex align-items-center"
-                                    onClick={() => handleApprovePartner(partner.id)}
+                                    onClick={() => handleApprovePartner(partner)}
                                   >
                                     <CheckCircle className="me-1" /> Approve
                                   </Button>
@@ -1022,6 +1097,17 @@ export default function AdminDashboard() {
                     />
                   </Form.Group>
                 </Col>
+                <Col md={6}>
+                  <Form.Group>
+                    <Form.Label className="small opacity-75">Commission Rate (%)</Form.Label>
+                    <Form.Control
+                      type="number"
+                      placeholder="20"
+                      value={newPartner.commissionRate}
+                      onChange={(e) => setNewPartner({ ...newPartner, commissionRate: e.target.value })}
+                    />
+                  </Form.Group>
+                </Col>
               </Row>
             </Form>
           </Modal.Body>
@@ -1029,6 +1115,54 @@ export default function AdminDashboard() {
             <Button variant="light" onClick={() => setOpenDialog(false)} className="rounded-pill px-4">Cancel</Button>
             <Button variant="primary" onClick={handleCreatePartner} disabled={creatingPartner} className="rounded-pill px-4 fw-bold">
               {creatingPartner ? <Spinner animation="border" size="sm" /> : 'Create Partner'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Invite Partner Modal */}
+        <Modal show={showInviteModal} onHide={() => setShowInviteModal(false)} centered className="glass-modal">
+          <Modal.Header closeButton>
+            <Modal.Title className="fw-bold d-flex align-items-center">
+              <Envelope className="text-primary me-2" /> Invite Strategic Partner
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4">
+            <Form>
+              <p className="small opacity-75 mb-4">Send an invitation link to a potential partner's email. They will be able to create their account with a pre-assigned commission rate.</p>
+              <Form.Group className="mb-3">
+                <Form.Label className="small opacity-75">Partner's Email Address</Form.Label>
+                <InputGroup>
+                  <InputGroup.Text className="bg-light border-end-0"><Envelope size={14} /></InputGroup.Text>
+                  <Form.Control
+                    type="email"
+                    className="border-start-0"
+                    placeholder="partner@example.com"
+                    value={inviteForm.email}
+                    onChange={(e) => setInviteForm({ ...inviteForm, email: e.target.value })}
+                    required
+                  />
+                </InputGroup>
+              </Form.Group>
+              <Form.Group className="mb-3">
+                <Form.Label className="small opacity-75">Assigned Commission Rate (%)</Form.Label>
+                <Form.Control
+                  type="number"
+                  placeholder="20"
+                  value={inviteForm.commissionRate}
+                  onChange={(e) => setInviteForm({ ...inviteForm, commissionRate: e.target.value })}
+                  min="0"
+                  max="100"
+                />
+                <Form.Text className="text-muted small">
+                  The partner will be restricted to this total pool for their referral codes.
+                </Form.Text>
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-4">
+            <Button variant="light" onClick={() => setShowInviteModal(false)} className="rounded-pill px-4">Cancel</Button>
+            <Button variant="primary" onClick={handleInvitePartner} disabled={inviting || !inviteForm.email} className="rounded-pill px-4 fw-bold">
+              {inviting ? <Spinner animation="border" size="sm" /> : 'Send Invitation Email'}
             </Button>
           </Modal.Footer>
         </Modal>
@@ -1082,6 +1216,25 @@ export default function AdminDashboard() {
                         <Form.Control
                           value={editForm.name || ''}
                           onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={12}>
+                      <Form.Group>
+                        <Form.Label className="small opacity-75">Position</Form.Label>
+                        <Form.Control
+                          value={editForm.position || ''}
+                          onChange={(e) => setEditForm({ ...editForm, position: e.target.value })}
+                        />
+                      </Form.Group>
+                    </Col>
+                    <Col md={12}>
+                      <Form.Group>
+                        <Form.Label className="small opacity-75">Commission Rate (%)</Form.Label>
+                        <Form.Control
+                          type="number"
+                          value={editForm.commissionRate || ''}
+                          onChange={(e) => setEditForm({ ...editForm, commissionRate: e.target.value })}
                         />
                       </Form.Group>
                     </Col>
@@ -1212,11 +1365,11 @@ export default function AdminDashboard() {
                     <Form.Label className="small opacity-75">Discount Percentage (%)</Form.Label>
                     <Form.Control
                       type="number"
-                      placeholder="0-20"
+                      placeholder={`0-${parseFloat(partners.find(p => p.id === parseInt(selectedPartner))?.commission_rate || 20)}`}
                       value={discountPercent}
                       onChange={(e) => setDiscountPercent(e.target.value)}
                       min="0"
-                      max="20"
+                      max={parseFloat(partners.find(p => p.id === parseInt(selectedPartner))?.commission_rate || 20)}
                     />
                   </Form.Group>
                 </Col>
@@ -1244,6 +1397,38 @@ export default function AdminDashboard() {
               className="rounded-pill px-4 fw-bold"
             >
               {creating ? <Spinner animation="border" size="sm" /> : 'Generate Code'}
+            </Button>
+          </Modal.Footer>
+        </Modal>
+
+        {/* Approve Partner Modal */}
+        <Modal show={showApproveModal} onHide={() => setShowApproveModal(false)} centered className="glass-modal">
+          <Modal.Header closeButton>
+            <Modal.Title className="fw-bold">Approve Partner</Modal.Title>
+          </Modal.Header>
+          <Modal.Body className="p-4">
+            <Form>
+              <p>Approve <strong>{partnerToApprove?.name}</strong> and assign a commission rate.</p>
+              <Form.Group>
+                <Form.Label className="small opacity-75">Commission Rate (%)</Form.Label>
+                <Form.Control
+                  type="number"
+                  placeholder="e.g. 20"
+                  value={commissionRateToAssign}
+                  onChange={(e) => setCommissionRateToAssign(e.target.value)}
+                  min="0"
+                  max="100"
+                />
+                <Form.Text className="text-muted">
+                  This rate defines the total pool for discounts and partner earnings.
+                </Form.Text>
+              </Form.Group>
+            </Form>
+          </Modal.Body>
+          <Modal.Footer className="border-0 p-4">
+            <Button variant="light" onClick={() => setShowApproveModal(false)} className="rounded-pill px-4">Cancel</Button>
+            <Button variant="success" onClick={confirmApprovePartner} disabled={approving} className="rounded-pill px-4 fw-bold">
+              {approving ? <Spinner animation="border" size="sm" /> : 'Approve & Assign'}
             </Button>
           </Modal.Footer>
         </Modal>

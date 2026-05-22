@@ -66,14 +66,16 @@ export default function PartnerDashboard() {
   }, []);
 
   useEffect(() => {
-    const calculatedMyShare = 20 - (parseFloat(discountPercent) || 0);
+    const rate = parseFloat(data?.profile?.commission_rate || 20);
+    const calculatedMyShare = rate - (parseFloat(discountPercent) || 0);
     setMyShare(Math.max(0, calculatedMyShare));
-  }, [discountPercent]);
+  }, [discountPercent, data]);
 
   useEffect(() => {
-    const calculatedEditingMyShare = 20 - (parseFloat(editingDiscountPercent) || 0);
+    const rate = parseFloat(data?.profile?.commission_rate || 20);
+    const calculatedEditingMyShare = rate - (parseFloat(editingDiscountPercent) || 0);
     setEditingMyShare(Math.max(0, calculatedEditingMyShare));
-  }, [editingDiscountPercent]);
+  }, [editingDiscountPercent, data]);
 
   const fetchData = async () => {
     const token = localStorage.getItem('token');
@@ -226,9 +228,10 @@ export default function PartnerDashboard() {
       toast.error('Please enter a referral code');
       return;
     }
+    const rate = parseFloat(data?.profile?.commission_rate || 20);
     const discount = parseFloat(discountPercent);
-    if (isNaN(discount) || discount < 0 || discount > 20) {
-      toast.error('Discount percentage must be between 0 and 20.');
+    if (isNaN(discount) || discount < 0 || discount > rate) {
+      toast.error(`Discount percentage must be between 0 and ${rate}%.`);
       return;
     }
 
@@ -244,7 +247,7 @@ export default function PartnerDashboard() {
         body: JSON.stringify({
           code: customCode.trim().toUpperCase(),
           discountPercent: discount,
-          myShare: 20 - discount,
+          myShare: rate - discount,
           startDate: startDate || null, // Send null if not set
           endDate: endDate || null,     // Send null if not set
         })
@@ -444,7 +447,7 @@ export default function PartnerDashboard() {
                         // Explicitly bind strictly to your exact backend column target name: my_share
                         const finalShare = codeItem.my_share !== undefined && codeItem.my_share !== null 
                           ? codeItem.my_share 
-                          : Math.max(0, 20 - parseFloat(finalDiscount));
+                          : Math.max(0, parseFloat(data?.profile?.commission_rate || 20) - parseFloat(finalDiscount));
 
                         return (
                           <tr key={codeItem.id} className="align-middle">
@@ -623,12 +626,16 @@ export default function PartnerDashboard() {
                     <Form.Label className="small opacity-75">Discount Percentage (%)</Form.Label>
                     <Form.Control
                       type="number"
-                      placeholder="0-20"
+                      placeholder={`0-${data?.profile?.commission_rate || 20}`}
                       value={discountPercent}
                       onChange={(e) => setDiscountPercent(e.target.value)}
                       min="0"
-                      max="20"
+                      max={data?.profile?.commission_rate || 20}
+                      isInvalid={parseFloat(discountPercent) > (parseFloat(data?.profile?.commission_rate || 20))}
                     />
+                    <Form.Control.Feedback type="invalid">
+                      Cannot exceed your assigned rate of {data?.profile?.commission_rate || 20}%
+                    </Form.Control.Feedback>
                   </Form.Group>
                 </Col>
                 <Col md={6}>
@@ -673,7 +680,7 @@ export default function PartnerDashboard() {
             <Button
               variant="primary"
               onClick={handleCreateCode}
-              disabled={creatingCode || !customCode.trim() || parseFloat(discountPercent) > 20 || isNaN(parseFloat(discountPercent))}
+              disabled={creatingCode || !customCode.trim() || parseFloat(discountPercent) > (parseFloat(data?.profile?.commission_rate || 20)) || isNaN(parseFloat(discountPercent))}
               className="rounded-pill px-4 fw-bold"
             >
               {creatingCode ? <Spinner animation="border" size="sm" /> : 'Generate Code'}
@@ -708,11 +715,11 @@ export default function PartnerDashboard() {
                     <Form.Label className="small opacity-75">Discount Percentage (%)</Form.Label>
                     <Form.Control
                       type="number"
-                      placeholder="0-20"
+                      placeholder={`0-${data?.profile?.commission_rate || 20}`}
                       value={editingDiscountPercent}
                       onChange={(e) => setEditingDiscountPercent(e.target.value)}
                       min="0"
-                      max="20"
+                      max={data?.profile?.commission_rate || 20}
                       readOnly
                       disabled
                       className="bg-light"
@@ -761,7 +768,7 @@ export default function PartnerDashboard() {
             <Button
               variant="primary"
               onClick={handleUpdateCode}
-              disabled={updatingCode || !editingCustomCode.trim() || parseFloat(editingDiscountPercent) > 20 || isNaN(parseFloat(editingDiscountPercent))}
+              disabled={updatingCode || !editingCustomCode.trim() || parseFloat(editingDiscountPercent) > (parseFloat(data?.profile?.commission_rate || 20)) || isNaN(parseFloat(editingDiscountPercent))}
               className="rounded-pill px-4 fw-bold"
             >
               {updatingCode ? <Spinner animation="border" size="sm" /> : 'Save Changes'}
